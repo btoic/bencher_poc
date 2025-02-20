@@ -22,6 +22,9 @@ jobs:
       statuses: write
       checks: write
     steps:
+      - name: "Env"
+        run: |
+          env
       - uses: actions/checkout@v4
       - uses: bencherdev/bencher@main
         with:
