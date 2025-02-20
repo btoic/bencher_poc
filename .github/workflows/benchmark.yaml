@@ -1,0 +1,68 @@
+---
+name: Base Benchmark
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+
+jobs:
+  benchmark:
+    if: github.ref_type == 'branch' && github.ref_protected == true
+    runs-on:
+      - ubuntu-latest
+    env:
+      BENCHMARK_RESULTS: benchmark_results.json
+    permissions:
+      contents: read
+      actions: read
+      issues: write
+      discussions: write
+      statuses: write
+      checks: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: bencherdev/bencher@main
+        with:
+          version: v0.4.36
+      # mock.pow can be used in PR to simulate larger thresholds in later mock benchmarks
+      - name: "Mock pow"
+        run: |
+          echo "POW=$(cat mock.pow 2>/dev/null || echo 1 )" >> $GITHUB_ENV
+      - name: "Benchmark Mock"
+        run: |
+          bencher mock --measure latency --measure memory --pow ${POW} > benchmark_results.json
+      - name: Upload Benchmark Results
+        uses: actions/upload-artifact@v3
+        with:
+          name: benchmark_results.json
+          path: ./benchmark_results.json
+
+      - name: Upload GitHub Pull Request Event
+        uses: actions/upload-artifact@v3
+        with:
+          name: event.json
+          path: ${{ github.event_path }}
+
+      - name: Track base branch benchmarks with Bencher
+        run: |
+          bencher run \
+          --native-tls \
+          --project ${{ secrets.BENCHER_PROJECT }} \
+          --token '${{ secrets.BENCHER_API_TOKEN }}' \
+          --branch ${GITHUB_REF_NAME} \
+          --testbed alt-tc-perftest01 \
+          --threshold-measure latency \
+          --threshold-test t_test \
+          --threshold-max-sample-size 64 \
+          --threshold-upper-boundary 0.99 \
+          --threshold-measure memory \
+          --threshold-test t_test \
+          --threshold-max-sample-size 64 \
+          --threshold-upper-boundary 0.99 \
+          --thresholds-reset \
+          --err \
+          --adapter json \
+          --github-actions '${{ secrets.GITHUB_TOKEN }}' \
+          --file "$BENCHMARK_RESULTS"
