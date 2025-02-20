@@ -1,0 +1,39 @@
+---
+name: Run Benchmarks on PR
+on:
+  pull_request:
+    types:
+      - opened
+      - reopened
+      - synchronize
+      - labeled
+
+jobs:
+  benchmark_fork_pr:
+    if: contains(github.event.pull_request.labels.*.name, 'benchmark')
+    name: Benchmarks
+    runs-on:
+      - ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: bencherdev/bencher@main
+        with:
+          version: v0.4.36
+      # mock.pow can be used in PR to simulate larger thresholds in later mock benchmarks
+      - name: "Mock pow"
+        run: |
+          echo "POW=$(cat mock.pow 2>/dev/null || echo 1 )" >> $GITHUB_ENV
+
+      - name: "Run Benchmarks"
+        run: |
+          bencher mock --measure latency --measure memory --pow ${POW} > benchmark_results.json
+      - name: Upload Benchmark Results
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark_results.json
+          path: ./benchmark_results.json
+      - name: Upload GitHub Pull Request Event
+        uses: actions/upload-artifact@v4
+        with:
+          name: event.json
+          path: ${{ github.event_path }}
